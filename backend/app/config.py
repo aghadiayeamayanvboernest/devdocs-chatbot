@@ -19,9 +19,10 @@ class Settings(BaseSettings):
     langfuse_host: str = "https://cloud.langfuse.com"
 
     # App
-    environment: Literal["dev", "prod"] = "dev"
+    environment: Literal["dev", "prod", "production"] = "dev"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
+    cors_origins: str = ""  # Comma-separated list of allowed origins for production
 
     # Models
     embedding_model: str = "text-embedding-3-small"
