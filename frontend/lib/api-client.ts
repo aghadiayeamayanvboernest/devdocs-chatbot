@@ -5,6 +5,7 @@ import axios, { AxiosInstance, AxiosError } from "axios";
 import type {
   ChatRequest,
   ChatResponse,
+  ChatMessage,
   CodeGenerationRequest,
   CodeGenerationResponse,
   FeedbackRequest,
@@ -88,6 +89,41 @@ export const api = {
   },
 
   /**
+   * Chat endpoint with file uploads
+   */
+  chatWithFiles: async (
+    message: string,
+    frameworks: string[],
+    history: ChatMessage[],
+    files?: File[],
+    signal?: AbortSignal
+  ): Promise<ChatResponse> => {
+    // If no files, use regular JSON endpoint
+    if (!files || files.length === 0) {
+      const request: ChatRequest = { message, frameworks, history };
+      return api.chat(request, signal);
+    }
+
+    // Use FormData for file uploads
+    const formData = new FormData();
+    formData.append("message", message);
+    formData.append("frameworks", JSON.stringify(frameworks));
+    formData.append("history", JSON.stringify(history));
+
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    const response = await apiClient.post<ChatResponse>("/api/chat/upload", formData, {
+      signal,
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  },
+
+  /**
    * Code generation endpoint
    */
   generateCode: async (
@@ -98,6 +134,52 @@ export const api = {
       "/api/generate",
       request,
       { signal }
+    );
+    return response.data;
+  },
+
+  /**
+   * Code generation with file uploads
+   */
+  generateCodeWithFiles: async (
+    prompt: string,
+    frameworks: string[],
+    history: ChatMessage[],
+    includeDocsContext: boolean,
+    files?: File[],
+    signal?: AbortSignal
+  ): Promise<CodeGenerationResponse> => {
+    // If no files, use regular JSON endpoint
+    if (!files || files.length === 0) {
+      const request: CodeGenerationRequest = {
+        prompt,
+        frameworks,
+        history,
+        include_docs_context: includeDocsContext,
+      };
+      return api.generateCode(request, signal);
+    }
+
+    // Use FormData for file uploads
+    const formData = new FormData();
+    formData.append("prompt", prompt);
+    formData.append("frameworks", JSON.stringify(frameworks));
+    formData.append("history", JSON.stringify(history));
+    formData.append("include_docs_context", String(includeDocsContext));
+
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    const response = await apiClient.post<CodeGenerationResponse>(
+      "/api/generate/upload",
+      formData,
+      {
+        signal,
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
     );
     return response.data;
   },

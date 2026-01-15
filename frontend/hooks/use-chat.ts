@@ -4,11 +4,17 @@
 import { useMutation } from "@tanstack/react-query";
 import { useChatStore } from "@/store/chat-store";
 import api from "@/lib/api-client";
-import type {
-  ChatRequest,
-  CodeGenerationRequest,
-  FeedbackRequest,
-} from "@/types/api";
+import type { FeedbackRequest } from "@/types/api";
+
+interface ChatPayload {
+  message: string;
+  files?: File[];
+}
+
+interface CodePayload {
+  prompt: string;
+  files?: File[];
+}
 
 /**
  * Hook for sending chat messages (documentation Q&A)
@@ -20,42 +26,38 @@ export function useChat() {
   const messages = useChatStore((state) => state.messages);
 
   const mutation = useMutation({
-    mutationFn: async (message: string) => {
-      // Create abort controller
+    mutationFn: async ({ message, files }: ChatPayload) => {
       const controller = new AbortController();
       setAbortController(controller);
 
-      // Add user message
+      // Build user message content with file names
+      let userContent = message;
+      if (files && files.length > 0) {
+        const fileNames = files.map((f) => f.name).join(", ");
+        userContent = message
+          ? `${message}\n\n[Attached files: ${fileNames}]`
+          : `[Attached files: ${fileNames}]`;
+      }
+
       addMessage({
         role: "user",
-        content: message,
+        content: userContent,
       });
 
-      // Add placeholder for assistant response
       addMessage({
         role: "assistant",
         content: "",
         isGenerating: true,
       });
 
-      // Get conversation history (last 5 messages)
       const history = messages.slice(-10).map((msg) => ({
         role: msg.role,
         content: msg.content,
       }));
 
-      // Prepare request
-      const request: ChatRequest = {
-        message,
-        frameworks: selectedFrameworks,
-        history,
-      };
-
-      // Call API with abort signal
-      return api.chat(request, controller.signal);
+      return api.chatWithFiles(message, selectedFrameworks, history, files, controller.signal);
     },
     onSuccess: (data) => {
-      // Update the assistant message with response
       updateLastMessage({
         content: data.response,
         sources: data.sources,
@@ -66,7 +68,6 @@ export function useChat() {
       setAbortController(null);
     },
     onError: (error: Error) => {
-      // Check if it was aborted
       if (error.name === 'CanceledError' || error.message.includes('abort')) {
         updateLastMessage({
           content: "Generation stopped.",
@@ -87,11 +88,11 @@ export function useChat() {
     },
   });
 
-  const sendMessage = async (message: string) => {
-    if (!message.trim()) return;
+  const sendMessage = async (message: string, files?: File[]) => {
+    if (!message.trim() && (!files || files.length === 0)) return;
     setIsLoading(true);
     setError(null);
-    await mutation.mutateAsync(message);
+    await mutation.mutateAsync({ message, files });
   };
 
   return {
@@ -114,43 +115,45 @@ export function useCodeGeneration() {
   );
 
   const mutation = useMutation({
-    mutationFn: async (prompt: string) => {
-      // Create abort controller
+    mutationFn: async ({ prompt, files }: CodePayload) => {
       const controller = new AbortController();
       setAbortController(controller);
 
-      // Add user message
+      // Build user message content with file names
+      let userContent = prompt;
+      if (files && files.length > 0) {
+        const fileNames = files.map((f) => f.name).join(", ");
+        userContent = prompt
+          ? `${prompt}\n\n[Attached files: ${fileNames}]`
+          : `[Attached files: ${fileNames}]`;
+      }
+
       addMessage({
         role: "user",
-        content: prompt,
+        content: userContent,
       });
 
-      // Add placeholder for assistant response
       addMessage({
         role: "assistant",
         content: "",
         isGenerating: true,
       });
 
-      // Get conversation history (last 5 messages)
       const history = messages.slice(-10).map((msg) => ({
         role: msg.role,
         content: msg.content,
       }));
 
-      // Prepare request
-      const request: CodeGenerationRequest = {
+      return api.generateCodeWithFiles(
         prompt,
-        frameworks: selectedFrameworks,
+        selectedFrameworks,
         history,
-        include_docs_context: includeDocsContext,
-      };
-
-      // Call API with abort signal
-      return api.generateCode(request, controller.signal);
+        includeDocsContext,
+        files,
+        controller.signal
+      );
     },
     onSuccess: (data) => {
-      // Update the assistant message with generated code
       updateLastMessage({
         content: data.code,
         trace_id: data.trace_id,
@@ -160,7 +163,6 @@ export function useCodeGeneration() {
       setAbortController(null);
     },
     onError: (error: Error) => {
-      // Check if it was aborted
       if (error.name === 'CanceledError' || error.message.includes('abort')) {
         updateLastMessage({
           content: "Code generation stopped.",
@@ -181,11 +183,11 @@ export function useCodeGeneration() {
     },
   });
 
-  const generateCode = async (prompt: string) => {
-    if (!prompt.trim()) return;
+  const generateCode = async (prompt: string, files?: File[]) => {
+    if (!prompt.trim() && (!files || files.length === 0)) return;
     setIsLoading(true);
     setError(null);
-    await mutation.mutateAsync(prompt);
+    await mutation.mutateAsync({ prompt, files });
   };
 
   return {
