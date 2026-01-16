@@ -1,7 +1,6 @@
-"""Application configuration using pydantic-settings."""
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal
-
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -21,7 +20,8 @@ class Settings(BaseSettings):
     # App
     environment: Literal["dev", "prod", "production"] = "dev"
     app_host: str = "0.0.0.0"
-    app_port: int = 8000
+    # <- Use Render's PORT environment variable or fallback to 8000 locally
+    app_port: int = int(os.environ.get("PORT", 8000))
     cors_origins: str = ""  # Comma-separated list of allowed origins for production
 
     # Models
